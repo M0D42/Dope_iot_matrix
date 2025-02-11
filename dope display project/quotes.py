@@ -19,8 +19,8 @@ Purple = machine.Pin(3, machine.Pin.OUT)
 # Initializing WiFi setup
 wlan = wifimgr.get_connection()  # initializing WLAN
 api_key = ''
-mode = 'quotes'
-url = f'https://zenquotes.io/api/{mode}?option1=value&option2=value'
+mode = 'random'
+url = f'https://zenquotes.io/api/{mode}'
 delays = [1, 4, 10, 8, 9, 6, 11]
 
 # If there's no WiFi
