@@ -43,16 +43,21 @@ while True:
         print('quotes JSON: ', quotes)
 
         # Extract the temperature from the JSON response
-        quote = quotes['current']['temp_c']
-       quotes_text = f'Temperature: {temperature}°C'
-
-        # Scroll the temperature on the display
+        quote = quotes['q']['a']
+       quotes_text = f'{quotes}'
+        author = quotes['a']['h']
+        author_name = f'{author}'
+# Scroll the temperature on the display
         for i in range(len(quotes_text) * 8):
             display.fill(0)
             display.text(quotes_text, -i, 0, 1)
             display.show()
             sleep(0.1)
-
+        for i in range(len(author_text) * 8):
+            display.fill(0)
+            display.text(author_text, -i, 0, 1)
+            display.show()
+            sleep(0.1)
     except Exception as e:
         print('Failed to fetch quote data:', e)
         
