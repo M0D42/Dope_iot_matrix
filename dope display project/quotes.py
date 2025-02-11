@@ -37,23 +37,23 @@ while True:
         response = requests.get(url)
         # Print the response code
         print('Response code: ', response.status_code)
-        weather = response.json()
+        quotes = response.json()
         # Close the request
         response.close()
-        print('Weather JSON: ', weather)
+        print('quotes JSON: ', quotes)
 
         # Extract the temperature from the JSON response
-        temperature = weather['current']['temp_c']
-        temp_text = f'Temperature: {temperature}°C'
+        quote = quotes['current']['temp_c']
+       quotes_text = f'Temperature: {temperature}°C'
 
         # Scroll the temperature on the display
-        for i in range(len(temp_text) * 8):
+        for i in range(len(quotes_text) * 8):
             display.fill(0)
-            display.text(temp_text, -i, 0, 1)
+            display.text(quotes_text, -i, 0, 1)
             display.show()
             sleep(0.1)
 
     except Exception as e:
-        print('Failed to fetch weather data:', e)
+        print('Failed to fetch quote data:', e)
         
     sleep(delay * 60)
