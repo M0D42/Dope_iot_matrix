@@ -1,95 +1,123 @@
-#include <ESP8266WiFi.h>        // For ESP8266 (use <WiFi.h> for ESP32)
-#include <ESP8266HTTPClient.h>   // For HTTP requests (use HTTPClient for ESP32)
-#include <Max72xxPanel.h>        // Display library
-#include <ArduinoJson.h>         // ArduinoJson library for JSON parsing
+#include <ArduinoJson.h>
+#include <WiFiManager.h> // https://github.com/tzapu/WiFiManager
+#include <HTTPClient.h>
+#include <WiFi.h>
+#include <MD_Parola.h>
+#include <MD_MAX72xx.h>
+#include <SPI.h>
+int delays[] = {10,14,15,12,17,19,11};
+String url = "https://zenquotes.io/api/random";
+String payload = "";
 
-// Wi-Fi credentials
-const char* ssid = "your_SSID";
-const char* password = "your_PASSWORD";
+  String quote = ""; // "The moment you doubt whether you can fly, you cease for ever to ...
+  String author = "";
+// Uncomment according to your hardware type
+#define HARDWARE_TYPE MD_MAX72XX::FC16_HW
+//#define HARDWARE_TYPE MD_MAX72XX::GENERIC_HW
 
-// API details
-const String type = "random";  // Replace with your desired API type
-const String url = "https://zenquotes.io/api/" + type;
-
-// Define the pins for the LED and the MAX7219 matrix
-const int dataIn = D1;
-const int load = D2;
-const int clk = D3;
-Max72xxPanel matrix = Max72xxPanel(dataIn, clk, load, 4);  // 4 modules, adjust as necessary
-
-// Initialize the purple LED pin
-const int purpleLED = D4;
-
-// Delay array
-int delays[] = {1, 4, 10, 8, 9, 6, 11};
+#define MAX_DEVICES 4
+#define CS_PIN 5
+MD_Parola Display = MD_Parola(HARDWARE_TYPE, CS_PIN, MAX_DEVICES);
+unsigned long lastActionTime = 0;  // Last time action was taken
+unsigned long numdInterval = 0;    // Interval duration based on numd value
 
 void setup() {
-  // Start serial communication
-  Serial.begin(115200);
-  delay(10);
+    Serial.begin(115200);
+    WiFiManager wm;
 
-  // Connect to Wi-Fi
-  WiFi.begin(ssid, password);
-  Serial.print("Connecting to WiFi");
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(1000);
-    Serial.print(".");
-  }
-  Serial.println("Connected to WiFi");
-  
-  // Initialize the LED pin
-  pinMode(purpleLED, OUTPUT);
-  digitalWrite(purpleLED, LOW);  // Turn off the LED initially
+    bool res;
+    // res = wm.autoConnect(); // auto generated AP name from chipid
+    // res = wm.autoConnect("AutoConnectAP"); // anonymous ap
+    res = wm.autoConnect("AutoConnectAP","password"); // password protected ap
 
-  // Initialize the matrix
-  matrix.setIntensity(10);  // Adjust brightness (0-15)
-  matrix.setRotation(0, false);  // No rotation
-  matrix.fillScreen(LOW);  // Clear the display
+    if(!res) {
+        Serial.println("Failed to connect");
+        // ESP.restart();
+    } 
+    else {
+        //if you get here you have connected to the WiFi    
+        Serial.println("connected...yeey :)");
+    }
+    
+  Display.begin();
+  Display.setIntensity(9);
+  Display.displayClear();
+  Display.write("matrix");
+
+  delay(3000);
+  Display.displayClear();
+  delay(200);
 }
 
 void loop() {
-  int delayTime = delays[random(0, 7)];  // Random delay from the array
-  String quoteText = fetchQuoteData();  // Fetch the quote data and get the quote text
+    unsigned long currentMillis = millis();  // Get current time
 
-  if (quoteText.length() > 0) {
-    // Scroll the quote on the display
-    for (int i = 0; i < quoteText.length() * 6; i++) {
-      matrix.fillScreen(LOW);
-      matrix.setCursor(-i, 0);
-      matrix.print(quoteText);
-      matrix.write();
-      delay(100);  // Scroll speed
+    // If enough time has passed based on numdInterval, perform the actions
+    if (currentMillis - lastActionTime >= numdInterval) {
+        lastActionTime = currentMillis;  // Update the last action time
+        int numd = delays[random(0, 6)];  // Random value from the delays array
+        numdInterval = numd * 6000;  // Set the interval based on numd (in milliseconds)
+
+        fetchapi();  // Fetch new quote
+        parseapi();  // Parse the quote
+        screenAnimate();  // Animate the quote on the LED matrix
     }
-  }
 
-  delay(delayTime * 60000);  // Wait for the specified delay in minutes
+    // Continuously animate the scrolling text
+    if (Display.displayAnimate()) {
+        Display.displayReset();  // Reset the display once the scrolling is complete
+    }
 }
 
-String fetchQuoteData() {
-  HTTPClient http;
-  http.begin(url);  // Initialize HTTP request
 
-  int httpCode = http.GET();  // Send GET request
-  if (httpCode == HTTP_CODE_OK) {
-    String payload = http.getString();  // Get the response payload
-
-    // Create a JSON document and parse the payload
-    StaticJsonDocument<512> doc;
-    DeserializationError error = deserializeJson(doc, payload);
-
-    if (error) {
-      Serial.println("Failed to parse JSON response.");
-      return "";
+void fetchapi(){
+      if(WiFi.status() == WL_CONNECTED){
+    HTTPClient http;
+    http.begin(url);
+    int httpCode = http.GET();
+    if(httpCode > 0){
+      payload = http.getString();
+      Serial.println("New payload");
+      Serial.println(payload);
+          }else{
+      Serial.println("request failed :<");
     }
 
-    // Extract the quote text from the JSON
-    String quote = doc[0]["q"].as<String>();  // Assuming the JSON array format is {"q": "quote"}
-    String author = doc[0]["a"].as<String>(); // Assuming the JSON array format is {"a": "author"}
-
-    String quoteText = "\"" + quote + "\" - " + author;  // Format the quote text
-    return quoteText;
-  } else {
-    Serial.println("Failed to fetch data.");
-    return "";
+  }else{
+   Serial.println("Wifi disconected");
   }
+  }
+
+void parseapi(){
+  DynamicJsonDocument doc(192);
+  DeserializationError error = deserializeJson(doc,payload);
+  if (error) {
+  Serial.print("deserializeJson() failed: ");
+  Serial.println(error.c_str());
+  return;
+}
+  JsonObject quoteOb = doc[0];
+   quote = quoteOb["q"].as<String>();; // "The moment you doubt whether you can fly, you cease for ever to ...
+   author = quoteOb["a"].as<String>();;
+
+  Serial.println(quote);
+  Serial.println(author);
+  }
+// Animate the quote on the LED matrix
+void screenAnimate(){
+  Serial.println("Screen Started");
+
+  // Combine quote and author into a single string
+  String msg = quote + " by " + author ;
+
+  // Debug: Check if the message is too short or empty
+  
+  Serial.println(msg.c_str());
+  
+    // Scroll the message across the LED matrix
+    Display.displayScroll(msg.c_str(), PA_RIGHT, PA_SCROLL_LEFT, 70);
+    Display.displayClear();
+    // Once the message finishes scrolling, reset the display
+    delay(2000);
+   
 }
